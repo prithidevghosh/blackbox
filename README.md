@@ -46,7 +46,7 @@ Prereqs: macOS (or Linux) with zsh, Node ≥ 20, git. [Ollama](https://ollama.co
 recommended for the LLM features (everything else works without it).
 
 ```bash
-git clone <this-repo> blackbox && cd blackbox
+git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
 ./install.sh          # installs deps, starts Supermemory Local + daemon,
                       # adds hooks to ~/.zshrc (marked block, easy to remove)
 exec zsh              # reload your shell
@@ -201,3 +201,8 @@ containing events from **all three sources**.
 Docs: [docs/api-notes.md](docs/api-notes.md) (observed API + transcript formats) ·
 [DECISIONS.md](DECISIONS.md) (choices + reasoning) · [demo/script.md](demo/script.md)
 (3-minute demo screenplay)
+
+## License
+
+[MIT](LICENSE). Issues and PRs welcome — `npm run test:all` must stay green
+(the e2e harness needs Supermemory Local running on :6767).

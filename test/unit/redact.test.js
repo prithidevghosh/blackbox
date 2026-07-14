@@ -9,9 +9,9 @@ test('AWS access keys', () => {
 });
 
 test('sk- and sm_ API keys', () => {
-  const out = redactText('curl -H "x-api-key: sk-ant-abc123def456ghi789jkl" and sm_yPyTam6QYtCgV8j43pYBG2_EefALJ1onHj');
+  const out = redactText('curl -H "x-api-key: sk-ant-abc123def456ghi789jkl" and sm_fak3key000AAAbbbCCCddd_EXAMPLEonly');
   assert.doesNotMatch(out, /sk-ant-abc/);
-  assert.doesNotMatch(out, /sm_yPyTam/);
+  assert.doesNotMatch(out, /sm_fak3key/);
   assert.equal((out.match(/\[REDACTED:api-key\]/g) || []).length, 2);
 });
 

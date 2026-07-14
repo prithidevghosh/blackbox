@@ -136,7 +136,7 @@ Notes:
 
 - **Location:** `~/.claude/projects/<munged-project-path>/<session-uuid>.jsonl`
   where the munged path is the absolute project path with `/` and `.` replaced by `-`
-  (e.g. `-Users-prithidevghosh-Documents-langchain`).
+  (e.g. `-Users-dev-Documents-my-project`).
 - One JSONL file per session; **appended live** while a session runs.
 - Line types observed (survey over 30 real session files, `claude-vscode` entrypoint;
   CLI entrypoint shares the schema — same writer):
