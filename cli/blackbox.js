@@ -12,7 +12,8 @@ const commands = {
   record: () => import('./cmd/record.js'),
   init: () => import('./cmd/init.js'),
   'ingest-daemon': () => import('./cmd/ingest-daemon.js'),
-  _spool: () => import('./cmd/spool.js'), // internal: git hook & tests write events through this
+  _spool: () => import('./cmd/spool.js'), // internal: tests write events through this
+  '_git-commit': () => import('./cmd/git-commit.js'), // internal: called by post-commit hook
 };
 
 function usage(code = 0) {
