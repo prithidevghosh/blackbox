@@ -7,9 +7,9 @@
     "blackbox": "./cli/blackbox.js"
   },
   "scripts": {
-    "test": "node --test test/unit/",
+    "test": "node --test 'test/unit/**/*.test.js'",
     "test:e2e": "node test/e2e/run.js",
-    "test:all": "node --test test/unit/ && node test/e2e/run.js"
+    "test:all": "npm test && npm run test:e2e"
   },
   "engines": {
     "node": ">=20"

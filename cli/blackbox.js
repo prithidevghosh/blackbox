@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+// blackbox — local flight recorder for dev work.
+// Subcommands are lazy-imported so `blackbox record`'s shell path stays light.
+
+const [, , cmd, ...args] = process.argv;
+
+const commands = {
+  ask: () => import('./cmd/ask.js'),
+  standup: () => import('./cmd/standup.js'),
+  rca: () => import('./cmd/rca.js'),
+  status: () => import('./cmd/status.js'),
+  record: () => import('./cmd/record.js'),
+  init: () => import('./cmd/init.js'),
+  'ingest-daemon': () => import('./cmd/ingest-daemon.js'),
+  _spool: () => import('./cmd/spool.js'), // internal: git hook & tests write events through this
+};
+
+function usage(code = 0) {
+  console.log(`blackbox — local flight recorder for dev work
+
+Usage:
+  blackbox ask "<question>" [--explain] [--limit N]   search everything you did
+  blackbox standup [--since 24h]                      draft a standup
+  blackbox rca <TICKET-ID> [--out file.md]            draft a root-cause analysis
+  blackbox status                                     component health check
+  blackbox record                                     start an output-recorded subshell
+  blackbox init                                       install git hook in current repo
+  blackbox ingest-daemon [--once]                     run the spool->supermemory daemon
+
+Data stays on this machine: ~/.blackbox spool -> localhost:6767 (Supermemory Local).`);
+  process.exit(code);
+}
+
+if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') usage();
+if (!commands[cmd]) {
+  console.error(`blackbox: unknown command '${cmd}'\n`);
+  usage(1);
+}
+
+const mod = await commands[cmd]();
+await mod.run(args);
