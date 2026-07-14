@@ -54,3 +54,19 @@ Ollama had gemma4 models (7–17 GB) but no small instruct model. Pulled
 `llama3.2:3b` (~2 GB) per the mission default: fastest cold generation for
 standup/rca on modest hardware, good enough for grounded summarization with
 citations. Model name is configurable in `~/.blackbox/config.json`.
+
+## D6 — e2e drives `blackbox record` through a real shell pipe
+
+macOS `script(1)` calls tcgetattr on stdin and rejects the socketpairs Node
+uses for `stdio: "pipe"`. The harness therefore feeds the recorded shell via
+`sh -c '{ paced printfs; } | blackbox record'` (a FIFO), matching how a human
+tty behaves. Input is paced because zsh installs the hooks at the end of rc
+sourcing — commands typed before that would be invisible to preexec.
+
+## D7 — proceeded with defaults where user input was optional
+
+Batched decisions taken without blocking (flagged for the user): product name
+kept as "blackbox"; Codex CLI supported best-effort via fixtures (not installed
+here); Jira enrichment for `rca` skipped (stretch goal requiring credentials —
+`jiraBaseURL` config key reserved); no clipboard capture (not in scope of the
+three streams).
