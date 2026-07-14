@@ -1,0 +1,21 @@
+{
+  "name": "blackbox",
+  "version": "0.1.0",
+  "description": "Fully local flight recorder for modern dev work — terminal, AI agent sessions, git — backed by Supermemory Local",
+  "type": "module",
+  "bin": {
+    "blackbox": "./cli/blackbox.js"
+  },
+  "scripts": {
+    "test": "node --test test/unit/",
+    "test:e2e": "node test/e2e/run.js",
+    "test:all": "node --test test/unit/ && node test/e2e/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3"
+  },
+  "license": "MIT"
+}
