@@ -34,7 +34,7 @@ Usage:
   blackbox init                                       install git hook in current repo
   blackbox setup                                      one-time setup (config, supermemory, zsh hooks)
   blackbox up                                         start supermemory + ingest daemon (e.g. after reboot)
-  blackbox down                                       stop what 'up' started (capture keeps spooling)
+  blackbox down [--all]                               stop the daemon (--all: also supermemory)
   blackbox ingest-daemon [--once]                     run the spool->supermemory daemon
 
 Data stays on this machine: ~/.blackbox spool -> localhost:6767 (Supermemory Local).`);

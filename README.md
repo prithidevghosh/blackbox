@@ -144,7 +144,7 @@ npm run test:all      # 50 unit tests + autonomous end-to-end harness
 | `blackbox init` | Record commits of the current repo (opt-in) |
 | `blackbox status` | Health of every component |
 | `blackbox setup` | One-time setup: config, Supermemory Local binary, Ollama model, zsh hooks |
-| `blackbox up` / `blackbox down` | Start/stop Supermemory Local + the daemon (e.g. after a reboot) |
+| `blackbox up` / `blackbox down [--all]` | Start everything / stop the daemon (`--all` also stops Supermemory — it stays up by default since some server builds wedge the port on exit) |
 | `blackbox ingest-daemon [--daemonize\|--stop\|--once]` | The spool → Supermemory pipeline |
 
 ## How it works
