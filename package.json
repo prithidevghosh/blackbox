@@ -6,6 +6,16 @@
   "bin": {
     "blackbox": "./cli/blackbox.js"
   },
+  "files": [
+    "cli",
+    "daemon",
+    "lib",
+    "watchers",
+    "shell",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test 'test/unit/**/*.test.js'",
     "test:e2e": "node test/e2e/run.js",

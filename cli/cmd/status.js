@@ -43,7 +43,7 @@ export async function run() {
     console.log(ok(`supermemory local     ${cfg.baseURL} — up, ${docCount} documents in '${cfg.containerTag}'`));
     console.log(ok(`  by source           ${srcLine}${processing ? yellow(`  (${processing} still processing)`) : ''}`));
   } else {
-    console.log(bad(`supermemory local     ${cfg.baseURL} — unreachable (capture still works; events wait in the spool)`));
+    console.log(bad(`supermemory local     ${cfg.baseURL} — unreachable, start: blackbox up (capture still works; events wait in the spool)`));
   }
 
   // daemon
@@ -52,7 +52,7 @@ export async function run() {
   try {
     pending = fs.readdirSync(p.spoolNew).length;
   } catch {}
-  console.log(pid ? ok(`ingest daemon         running (pid ${pid}), ${pending} events pending`) : bad(`ingest daemon         not running — start: blackbox ingest-daemon --daemonize${pending ? ` (${pending} events waiting)` : ''}`));
+  console.log(pid ? ok(`ingest daemon         running (pid ${pid}), ${pending} events pending`) : bad(`ingest daemon         not running — start: blackbox up${pending ? ` (${pending} events waiting)` : ''}`));
 
   // shell hooks
   let zshrc = '';
@@ -62,7 +62,7 @@ export async function run() {
   console.log(
     zshrc.includes('BEGIN BLACKBOX')
       ? ok('zsh hooks             installed in ~/.zshrc (new shells record commands)')
-      : warn('zsh hooks             not installed — run install.sh')
+      : warn('zsh hooks             not installed — run: blackbox setup')
   );
 
   // flashback (M8b)

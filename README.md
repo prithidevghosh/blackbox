@@ -8,7 +8,7 @@
 
 Terminal commands · AI-agent sessions · git commits — recorded, correlated, searchable by meaning.
 
-<img alt="tests: 45 unit + e2e" src="https://img.shields.io/badge/tests-45_unit_+_e2e-2ea44f">
+<img alt="tests: 50 unit + e2e" src="https://img.shields.io/badge/tests-50_unit_+_e2e-2ea44f">
 <img alt="privacy: 100% local" src="https://img.shields.io/badge/privacy-100%25_local-F04E00">
 <img alt="node ≥ 20" src="https://img.shields.io/badge/node-%E2%89%A5_20-339933?logo=nodedotjs&logoColor=white">
 <img alt="platform: macOS | Linux" src="https://img.shields.io/badge/platform-macOS_·_Linux-555">
@@ -100,12 +100,22 @@ $ blackbox ask "..." --explain            # grounded answer, local LLM, cited
 
 ```bash
 git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
-./install.sh          # installs deps, starts Supermemory Local + daemon,
+./install.sh          # deps + `blackbox setup`: starts Supermemory Local + daemon,
                       # adds hooks to ~/.zshrc (marked block, easy to remove)
 exec zsh              # reload your shell
 blackbox status       # all green?
 blackbox init         # inside any repo whose commits you want recorded
 ```
+
+Or npm-style (same result — `install.sh` is just a wrapper around this):
+
+```bash
+npm install -g .      # or `npm link` from the clone
+blackbox setup        # one-time: config, Supermemory Local, Ollama model, zsh hooks
+```
+
+Setup is one-time. After a reboot, `blackbox up` restarts Supermemory Local +
+the daemon; `blackbox down` stops them (capture keeps spooling either way).
 
 Work normally. Then ask:
 
@@ -116,7 +126,7 @@ blackbox ask "what did I deploy yesterday"
 Verify the whole pipeline without doing any work:
 
 ```bash
-npm run test:all      # 45 unit tests + autonomous end-to-end harness
+npm run test:all      # 50 unit tests + autonomous end-to-end harness
 ```
 
 ## Commands
@@ -130,6 +140,8 @@ npm run test:all      # 45 unit tests + autonomous end-to-end harness
 | `blackbox flashback "<command>" [--exit N]` | Preview the ⚡ hint a failing command would get (the zsh hook fires this automatically) |
 | `blackbox init` | Record commits of the current repo (opt-in) |
 | `blackbox status` | Health of every component |
+| `blackbox setup` | One-time setup: config, Supermemory Local binary, Ollama model, zsh hooks |
+| `blackbox up` / `blackbox down` | Start/stop Supermemory Local + the daemon (e.g. after a reboot) |
 | `blackbox ingest-daemon [--daemonize\|--stop\|--once]` | The spool → Supermemory pipeline |
 
 ## How it works
@@ -180,7 +192,7 @@ capture path can never break your prompt (`|| true` everywhere on the hot path).
   (Xenova/bge-base-en-v1.5) — on your CPU.
 - **Generation** (`--explain`, `standup`, `rca`) calls Ollama on
   `localhost:11434`. Supermemory Local's own LLM backend is also pointed at
-  Ollama by `install.sh`, so no component holds a cloud key.
+  Ollama by `blackbox setup`, so no component holds a cloud key.
 - **Secrets are redacted before ingestion, always**: AWS `AKIA…` keys,
   `sk-*`/`sm_*`/`ghp_*`/`xox*` tokens, `Authorization:` headers,
   `password=`/`PASSWD=` values (quoted too), PEM blocks, and
@@ -248,7 +260,7 @@ sessions, commits — and synthesizes answers from it.
 ## Testing
 
 ```bash
-npm test          # 45 unit tests: parsers, redaction, correlation, record
+npm test          # 50 unit tests: parsers, redaction, correlation, record
                   # splitting, spool, config, flashback
 npm run test:e2e  # autonomous rule-3 harness: scripted zsh session with a
                   # planted failure + live agent-transcript replay + hooked

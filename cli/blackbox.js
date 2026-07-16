@@ -11,6 +11,9 @@ const commands = {
   status: () => import('./cmd/status.js'),
   record: () => import('./cmd/record.js'),
   init: () => import('./cmd/init.js'),
+  setup: () => import('./cmd/setup.js'),
+  up: () => import('./cmd/up.js'),
+  down: () => import('./cmd/down.js'),
   'ingest-daemon': () => import('./cmd/ingest-daemon.js'),
   flashback: () => import('./cmd/flashback.js'),
   _flashback: () => import('./cmd/flashback.js'), // internal: fired by the zsh hook on failed commands
@@ -29,6 +32,9 @@ Usage:
   blackbox record                                     start an output-recorded subshell
   blackbox flashback "<command>" [--exit N]           preview the failed-command hint
   blackbox init                                       install git hook in current repo
+  blackbox setup                                      one-time setup (config, supermemory, zsh hooks)
+  blackbox up                                         start supermemory + ingest daemon (e.g. after reboot)
+  blackbox down                                       stop what 'up' started (capture keeps spooling)
   blackbox ingest-daemon [--once]                     run the spool->supermemory daemon
 
 Data stays on this machine: ~/.blackbox spool -> localhost:6767 (Supermemory Local).`);
