@@ -1,8 +1,11 @@
-# Publish @prithidevghosh/blackbox to npm when a GitHub release is published
-# (or manually via the Actions tab). Unit tests gate the publish; the e2e
+# Publish @prithidevghosh/blackbox when a GitHub release is published (or
+# manually via the Actions tab). Unit tests gate both publishes; the e2e
 # harness needs a live Supermemory Local, so it stays local-only.
-# Requires the NPM_TOKEN repo secret (npmjs.com → Access Tokens → Granular,
-# with read/write on this package).
+# Two registries, independent jobs:
+#   - npmjs.com — the real install source; needs the NPM_TOKEN repo secret
+#     (npmjs.com → Access Tokens → Granular, read/write on this package)
+#   - GitHub Packages — populates the repo's "Packages" sidebar; uses the
+#     built-in GITHUB_TOKEN, no setup needed
 name: npm publish
 
 on:
@@ -37,3 +40,20 @@ jobs:
       - run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github-packages:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+      - run: npm ci
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
