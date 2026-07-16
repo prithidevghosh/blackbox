@@ -7,7 +7,7 @@
   "description": "Fully local flight recorder for modern dev work — terminal, AI agent sessions, git — backed by Supermemory Local",
   "type": "module",
   "bin": {
-    "blackbox": "./cli/blackbox.js"
+    "blackbox": "cli/blackbox.js"
   },
   "files": [
     "cli",
