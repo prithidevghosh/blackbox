@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/logo.svg" width="130" alt="blackbox logo — an orange flight recorder with a signal trace">
+<img src="https://raw.githubusercontent.com/prithidevghosh/blackbox/main/docs/assets/logo.svg" width="130" alt="blackbox logo — an orange flight recorder with a signal trace">
 
 # blackbox
 
@@ -107,10 +107,10 @@ blackbox status       # all green?
 blackbox init         # inside any repo whose commits you want recorded
 ```
 
-Or npm-style (same result — `install.sh` is just a wrapper around this):
+Or npm-style, no clone needed (same result — `install.sh` is just a wrapper around this):
 
 ```bash
-npm install -g .      # or `npm link` from the clone
+npm install -g @prithidevghosh/blackbox
 blackbox setup        # one-time: config, Supermemory Local, Ollama model, zsh hooks
 ```
 

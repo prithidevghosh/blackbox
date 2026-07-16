@@ -1,6 +1,9 @@
 {
-  "name": "blackbox",
+  "name": "@prithidevghosh/blackbox",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Fully local flight recorder for modern dev work — terminal, AI agent sessions, git — backed by Supermemory Local",
   "type": "module",
   "bin": {
