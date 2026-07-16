@@ -10,7 +10,7 @@ Terminal commands · AI-agent sessions · git commits — recorded, correlated, 
 
 <img alt="tests: 45 unit + e2e" src="https://img.shields.io/badge/tests-45_unit_+_e2e-2ea44f">
 <img alt="privacy: 100% local" src="https://img.shields.io/badge/privacy-100%25_local-F04E00">
-<img alt="node >= 20" src="https://img.shields.io/badge/node-%E2%89%A5_20-339933?logo=nodedotjs&logoColor=white">
+<img alt="node ≥ 20" src="https://img.shields.io/badge/node-%E2%89%A5_20-339933?logo=nodedotjs&logoColor=white">
 <img alt="platform: macOS | Linux" src="https://img.shields.io/badge/platform-macOS_·_Linux-555">
 <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
 
