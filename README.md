@@ -224,6 +224,7 @@ indistinguishable from disabled (the hook stays async).
 The harness aborts early with an explanation if Supermemory is mid-backlog
 (each document costs ~1 min of local-LLM time to fully process) — pause your
 own capture with `blackbox ingest-daemon --stop` and re-run once it drains.
+`BLACKBOX_E2E_BASEURL` points the harness at a different Supermemory instance.
 
 ## Notes & known limits
 
