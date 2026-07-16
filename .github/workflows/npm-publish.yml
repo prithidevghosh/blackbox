@@ -2,10 +2,15 @@
 # manually via the Actions tab). Unit tests gate both publishes; the e2e
 # harness needs a live Supermemory Local, so it stays local-only.
 # Two registries, independent jobs:
-#   - npmjs.com — the real install source; needs the NPM_TOKEN repo secret
-#     (npmjs.com → Access Tokens → Granular, read/write on this package)
+#   - npmjs.com — the real install source. Auth is OIDC Trusted Publishing
+#     (npm no longer allows 2FA-bypass tokens for CI): one-time setup at
+#     npmjs.com → package → Settings → Trusted Publisher → GitHub Actions,
+#     repo prithidevghosh/blackbox, workflow npm-publish.yml. No secrets.
+#     Needs npm >= 11.5, hence the npm upgrade step.
 #   - GitHub Packages — populates the repo's "Packages" sidebar; uses the
 #     built-in GITHUB_TOKEN, no setup needed
+# Both publish jobs skip (instead of fail) when the version already exists
+# in their registry, so a re-dispatch after a partial failure is safe.
 name: npm publish
 
 on:
@@ -29,17 +34,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance attestation
+      id-token: write # OIDC trusted publishing + provenance attestation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org/
+      - run: npm install -g npm@latest # OIDC trusted publishing needs npm >= 11.5
+      - name: skip if this version is already on npmjs
+        id: check
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "@prithidevghosh/blackbox@$V" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "v$V already published — skipping"
+          fi
       - run: npm ci
-      - run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: steps.check.outputs.skip != 'true'
+      - run: npm publish # provenance is automatic under trusted publishing
+        if: steps.check.outputs.skip != 'true'
 
   publish-github-packages:
     needs: test
@@ -53,7 +67,19 @@ jobs:
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com
+      - name: skip if this version is already on GitHub Packages
+        id: check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "@prithidevghosh/blackbox@$V" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "v$V already published — skipping"
+          fi
       - run: npm ci
+        if: steps.check.outputs.skip != 'true'
       - run: npm publish
+        if: steps.check.outputs.skip != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
