@@ -3,4 +3,7 @@ node_modules/
 .DS_Store
 test/tmp/
 rca*.md
-!demo/rca*.md
+
+
+# demo/submission material stays local (not for the public repo)
+demo/
