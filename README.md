@@ -117,8 +117,9 @@ git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
 ./install.sh
 ```
 
-Setup is one-time. After a reboot, `blackbox up` restarts Supermemory Local +
-the daemon; `blackbox down` stops them (capture keeps spooling either way).
+Setup is one-time. After a reboot, `blackbox up` restarts Ollama, Supermemory
+Local + the daemon; `blackbox down` stops the daemon (capture keeps spooling
+either way).
 
 Work normally. Then ask:
 
@@ -144,7 +145,7 @@ npm run test:all      # 50 unit tests + autonomous end-to-end harness
 | `blackbox init` | Record commits of the current repo (opt-in) |
 | `blackbox status` | Health of every component |
 | `blackbox setup` | One-time setup: config, Supermemory Local binary, Ollama model, zsh hooks |
-| `blackbox up` / `blackbox down [--all]` | Start everything / stop the daemon (`--all` also stops Supermemory — it stays up by default since some server builds wedge the port on exit) |
+| `blackbox up` / `blackbox down [--all]` | Start everything (Ollama, Supermemory, daemon) / stop the daemon (`--all` also stops the servers — Supermemory stays up by default since some builds wedge the port on exit) |
 | `blackbox ingest-daemon [--daemonize\|--stop\|--once]` | The spool → Supermemory pipeline |
 
 ## How it works

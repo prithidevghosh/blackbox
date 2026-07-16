@@ -94,7 +94,7 @@ export async function run() {
         : warn(`ollama                up, but model ${cfg.ollama.model} missing — ollama pull ${cfg.ollama.model} (ask/standup/rca fall back to no-LLM output)`)
     );
   } else {
-    console.log(warn(`ollama                ${cfg.ollama.baseURL} — unreachable (ask/standup/rca fall back to no-LLM output)`));
+    console.log(warn(`ollama                ${cfg.ollama.baseURL} — unreachable, start: blackbox up (ask/standup/rca fall back to no-LLM output)`));
   }
 
   // git hook in current repo
