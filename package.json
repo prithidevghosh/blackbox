@@ -1,6 +1,6 @@
 {
   "name": "@prithidevghosh/blackbox",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
@@ -32,7 +32,17 @@
     "url": "git+https://github.com/prithidevghosh/blackbox.git"
   },
   "author": "Prithidev Ghosh <prithidevghosh@gmail.com>",
-  "keywords": ["supermemory", "local-first", "developer-tools", "flight-recorder", "terminal", "claude-code", "ollama", "rca", "standup"],
+  "keywords": [
+    "supermemory",
+    "local-first",
+    "developer-tools",
+    "flight-recorder",
+    "terminal",
+    "claude-code",
+    "ollama",
+    "rca",
+    "standup"
+  ],
   "dependencies": {
     "chokidar": "^4.0.3"
   },
