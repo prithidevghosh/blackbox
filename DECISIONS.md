@@ -70,3 +70,80 @@ kept as "blackbox"; Codex CLI supported best-effort via fixtures (not installed
 here); Jira enrichment for `rca` skipped (stretch goal requiring credentials —
 `jiraBaseURL` config key reserved); no clipboard capture (not in scope of the
 three streams).
+
+## Update round 1 (2026-07-16) — audit
+
+State of every milestone before applying this round's updates, verified by
+running the full suite + e2e from a clean state:
+
+| milestone | state | evidence |
+|---|---|---|
+| M1 foundation (config, spool, atomic events) | done | unit tests green; spool drains in e2e |
+| M2 terminal capture (zsh hooks + `record` output mode) | done | e2e records planted failure with output |
+| M3 agent-session capture (claude-code live-tail; codex fixture) | done — **protected, do not weaken** | e2e replays transcript with mid-line split |
+| M4 git capture (opt-in post-commit) | done | e2e hooked commit spooled |
+| M5 redaction pre-ingestion | done — frozen | 10 unit tests |
+| M6 ingest daemon (correlate, batch, backoff) | done | e2e three sources tagged repo+ticket |
+| M7 `ask` (+ `--explain`) | done — frozen | e2e semantic retrieval with different words |
+| M8 `standup` / `rca` | done | e2e rca timeline has all three sources |
+| M8b flashback (proactive recall on failure) | **missing** → built this round (D9, D10) | was never implemented; no trace in code or log |
+| M9 `status` / install.sh | done | extended this round (per-source counts, flashback, backlog) |
+| M10 e2e harness + docs + demo | done | hardened this round (D8) |
+| M11 ui | missing — last priority, not built this round | — |
+
+The audit run itself: 38/38 unit tests green; e2e failed 3 assertions for an
+environmental reason analysed in D8 (not a code regression).
+
+## D8 — e2e vs a busy shared Supermemory instance
+
+**Observed:** Supermemory Local 0.0.5 processes every document through a
+"memory agent" LLM step (~40–60 s per document on llama3.2:3b, 2 concurrent
+workers). Dogfooding blackbox while developing it means the agent watcher
+captures the dev session itself, continuously refilling the queue — the e2e's 7
+documents queued behind ~40 others and its 300 s wait expired, failing 3
+assertions with no code at fault.
+
+**Also observed (hazard):** running a *second* supermemory-server on another
+port for test isolation does not work — both instances attach to one rivet
+workflow engine, the second instance steals the first's workflow jobs, and its
+storage writes fail (`store-batch-1 ✗`), wedging both. Do not attempt
+instance-per-test-run isolation on one machine.
+
+**Decision:** (a) the harness now prefliights the shared queue and aborts early
+with an actionable message (pause capture: `blackbox ingest-daemon --stop`,
+events wait safely in the spool) instead of failing three ways 8 minutes later;
+(b) the harness accepts `BLACKBOX_E2E_BASEURL` so it can run against any
+instance; (c) `blackbox status` now shows how many documents are still
+processing. Raising the 300 s timeout was rejected: it hides the problem and
+makes failures slower, not rarer.
+
+## D9 — flashback similarity threshold: 0.72, calibrated
+
+**Method:** scored real /v3/search results (bge-base-en-v1.5 chunk scores) for
+two query classes against both the e2e fixture container and a 200+ document
+container of genuine usage:
+
+- true repeats (same planted failure re-typed exactly): **0.923**;
+  command-only re-typed: **0.722–0.781**; semantic paraphrase
+  ("authentication problem with redis" vs NOAUTH): **0.786–0.793**
+- unrelated failing commands (cargo/kubectl/python/make/docker/jest/terraform/
+  go, 14 probes across both containers): **max 0.689**, typical 0.56–0.65
+
+**Decision:** threshold 0.72 — above every unrelated probe (margin 0.031),
+at/below every true-repeat top hit. Both knobs live in config
+(`flashback.enabled`, `flashback.similarity_threshold`); hook and CLI read the
+same config. A miss costs nothing (silence); a false hint costs trust — ties
+break toward silence.
+
+## D10 — flashback fires from a disowned background spawn, never the prompt
+
+The zsh precmd spawns `blackbox _flashback` in a disowned subshell writing to
+`/dev/tty` (`BLACKBOX_FLASHBACK_OUT` overrides for tests) and returns in ~1–5 ms
+— measured enabled-vs-disabled in the e2e, which also asserts total silence
+when Supermemory is unreachable and when similarity is below threshold. Exit
+130 (SIGINT) never triggers a hint: the user aborting a command is not a
+failure worth interrupting them about. The hint cites count and recency from
+result metadata (`metadata.ts`), and shows a correlated git commit when one
+also clears the threshold — the cross-stream story in one glance. Enabled in
+`record` mode too (the demo runs there); the hint may land in the typescript
+between command sentinels, which the record parser already tolerates.

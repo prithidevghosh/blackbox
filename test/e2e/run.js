@@ -19,6 +19,8 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const cli = path.join(root, 'cli', 'blackbox.js');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Supermemory Local to test against — override when :6767 is occupied
+const SM_URL = process.env.BLACKBOX_E2E_BASEURL || 'http://localhost:6767';
 const RUN_TAG = `blackbox-e2e-${Date.now()}`;
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'blackbox-e2e-'));
 const bbHome = path.join(work, 'bbhome');
@@ -50,7 +52,7 @@ async function waitFor(cond, { timeoutMs = 120_000, stepMs = 1000, label = 'cond
 }
 
 async function api(pathname, body) {
-  const res = await fetch(`http://localhost:6767${pathname}`, {
+  const res = await fetch(`${SM_URL}${pathname}`, {
     method: body ? 'POST' : 'GET',
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -64,11 +66,23 @@ async function main() {
   console.log(`\nblackbox e2e — tag ${RUN_TAG}\n${'─'.repeat(60)}`);
 
   // ── preflight ────────────────────────────────────────────────
-  const smUp = await fetch('http://localhost:6767/', { signal: AbortSignal.timeout(2000) })
+  const smUp = await fetch(`${SM_URL}/`, { signal: AbortSignal.timeout(2000) })
     .then((r) => r.status < 500)
     .catch(() => false);
   if (!smUp) {
-    console.error('Supermemory Local is not running on :6767 — start it first (see README quickstart).');
+    console.error(`Supermemory Local is not running at ${SM_URL} — start it first (see README quickstart).`);
+    process.exit(2);
+  }
+
+  // A busy shared instance starves this run's documents: each document costs
+  // ~40-60s of local-LLM "memory agent" time with 2 workers, so a backlog of N
+  // docs delays ours by ~N/2 minutes — far past our timeouts. Fail fast with a
+  // real message instead of three cryptic assertion timeouts (DECISIONS.md D8).
+  const backlog = await api('/v3/documents/list', { limit: 200 });
+  const busy = (backlog.memories || []).filter((d) => d.status !== 'done' && d.status !== 'failed').length;
+  if (busy > 6) {
+    console.error(`Supermemory Local is still processing ${busy} documents — this run's documents would queue behind them (~${Math.ceil(busy / 2)} min).`);
+    console.error('Pause your capture while it drains (blackbox ingest-daemon --stop; events wait in the spool), then re-run. Progress: tail -f ~/.blackbox/supermemory.log');
     process.exit(2);
   }
 
@@ -79,6 +93,7 @@ async function main() {
     path.join(bbHome, 'config.json'),
     JSON.stringify(
       {
+        baseURL: SM_URL,
         containerTag: RUN_TAG,
         agents: { 'claude-code': { dir: agentDir, enabled: true }, codex: { enabled: false } },
       },
@@ -216,6 +231,90 @@ async function main() {
   // CLI-level check too (rendered output)
   const askOut = sh('node', [cli, 'ask', 'authentication problem with redis', '--limit', '5']);
   check('blackbox ask CLI renders the failure with source badge', /NOAUTH/.test(askOut) && /\[terminal\]/.test(askOut));
+
+  // ── flashback (M8b): proactive hint on a repeated failure ─────
+  // Trials drive the real zsh hook functions (preexec + simulated exit status +
+  // precmd) in isolated BLACKBOX_HOMEs whose spools no daemon watches, so the
+  // trials add nothing to the shared ingest queue. The hint lands via the
+  // hook's background spawn into BLACKBOX_FLASHBACK_OUT.
+  console.log('\n[stage flashback]');
+  // the planted failure exactly as _bb_preexec saw it typed in the record stage
+  const PLANTED_FAIL = 'sh -c "echo \\"(error) NOAUTH Authentication required.\\" >&2; echo \\"redis connection refused for worker\\"; exit 12"';
+  const hookZsh = path.join(root, 'shell', 'blackbox.zsh');
+  const mkHome = (name, baseURL) => {
+    const h = path.join(work, name);
+    fs.mkdirSync(h, { recursive: true });
+    fs.writeFileSync(path.join(h, 'config.json'), JSON.stringify({ baseURL, containerTag: RUN_TAG }, null, 2));
+    return h;
+  };
+  const fbHome = mkHome('bbflash', SM_URL);
+  const deadHome = mkHome('bbdead', 'http://localhost:59999'); // nothing listens: same code path as a killed :6767
+
+  // one simulated prompt cycle through the real hook; returns precmd wall-time (ms)
+  function hookTrial({ home, cmd, exitCode, outFile, disable = false }) {
+    const script = [
+      `source ${JSON.stringify(hookZsh)}`,
+      't0=$EPOCHREALTIME',
+      '_bb_preexec "$BB_TRIAL_CMD"',
+      '(exit "$BB_TRIAL_EXIT")',
+      '_bb_precmd',
+      't1=$EPOCHREALTIME',
+      'print -r -- $(( (t1 - t0) * 1000 ))',
+    ].join('\n');
+    const out = execFileSync('zsh', ['-c', script], {
+      encoding: 'utf8',
+      env: {
+        ...env,
+        BLACKBOX_HOME: home,
+        BLACKBOX_FLASHBACK_OUT: outFile,
+        BB_TRIAL_CMD: cmd,
+        BB_TRIAL_EXIT: String(exitCode),
+        ...(disable ? { BLACKBOX_NO_FLASHBACK: '1' } : {}),
+      },
+    });
+    return parseFloat(out.trim());
+  }
+
+  // (1) repeat failure → ⚡ hint, accurate count + recency, within ~1s
+  const hintFile = path.join(work, 'hint.out');
+  fs.writeFileSync(hintFile, '');
+  hookTrial({ home: fbHome, cmd: PLANTED_FAIL, exitCode: 12, outFile: hintFile });
+  const tHint = Date.now();
+  await waitFor(() => /⚡/.test(fs.readFileSync(hintFile, 'utf8')), { timeoutMs: 5000, stepMs: 100, label: 'flashback hint' });
+  const hint = fs.readFileSync(hintFile, 'utf8');
+  const hintMs = Date.now() - tHint;
+  check(
+    'flashback: repeated failure gets a hint (count + recency from metadata)',
+    /⚡ flashback: seen \d+× before — last .+ ago/.test(hint) && /NOAUTH/.test(hint),
+    hint ? `${hintMs}ms: ${hint.split('\n')[0]}` : 'no hint'
+  );
+  check('flashback: hint arrives fast enough for the prompt (<3s)', hint.includes('⚡') && hintMs < 3000, `${hintMs}ms`);
+
+  // (2) unrelated failure → total silence (low similarity)
+  const quietFile = path.join(work, 'quiet.out');
+  fs.writeFileSync(quietFile, '');
+  hookTrial({ home: fbHome, cmd: 'terraform apply -auto-approve', exitCode: 1, outFile: quietFile });
+  await sleep(3000);
+  check('flashback: unrelated failure stays silent', fs.readFileSync(quietFile, 'utf8') === '');
+
+  // (3) supermemory down → total silence, no error text
+  const deadFile = path.join(work, 'dead.out');
+  fs.writeFileSync(deadFile, '');
+  hookTrial({ home: deadHome, cmd: PLANTED_FAIL, exitCode: 12, outFile: deadFile });
+  await sleep(3000);
+  check('flashback: supermemory down stays totally silent', fs.readFileSync(deadFile, 'utf8') === '');
+
+  // (4) prompt latency: hook must stay async — enabled vs disabled within noise
+  const latFile = path.join(work, 'lat.out');
+  const avg = (disable) => {
+    const times = [];
+    for (let i = 0; i < 15; i++) times.push(hookTrial({ home: fbHome, cmd: `flaky-latency-probe --run ${i}`, exitCode: 1, outFile: latFile, disable }));
+    times.sort((a, b) => a - b);
+    return times[Math.floor(times.length / 2)]; // median: robust to a stray slow fork
+  };
+  const msOn = avg(false);
+  const msOff = avg(true);
+  check('flashback: prompt latency imperceptible (enabled ≈ disabled)', msOn - msOff < 30, `median ${msOn.toFixed(1)}ms on vs ${msOff.toFixed(1)}ms off`);
 
   // ── rca assertion (full rule-3) ───────────────────────────────
   if (process.env.E2E_THROUGH === 'ask') {

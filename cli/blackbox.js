@@ -12,6 +12,8 @@ const commands = {
   record: () => import('./cmd/record.js'),
   init: () => import('./cmd/init.js'),
   'ingest-daemon': () => import('./cmd/ingest-daemon.js'),
+  flashback: () => import('./cmd/flashback.js'),
+  _flashback: () => import('./cmd/flashback.js'), // internal: fired by the zsh hook on failed commands
   _spool: () => import('./cmd/spool.js'), // internal: tests write events through this
   '_git-commit': () => import('./cmd/git-commit.js'), // internal: called by post-commit hook
 };
@@ -25,6 +27,7 @@ Usage:
   blackbox rca <TICKET-ID> [--out file.md]            draft a root-cause analysis
   blackbox status                                     component health check
   blackbox record                                     start an output-recorded subshell
+  blackbox flashback "<command>" [--exit N]           preview the failed-command hint
   blackbox init                                       install git hook in current repo
   blackbox ingest-daemon [--once]                     run the spool->supermemory daemon
 

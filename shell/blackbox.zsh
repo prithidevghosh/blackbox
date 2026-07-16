@@ -17,6 +17,9 @@ _BB_SPOOL_NEW="$BLACKBOX_HOME/spool/new"
 mkdir -p "$_BB_SPOOL_TMP" "$_BB_SPOOL_NEW" 2>/dev/null || return 0
 
 _BB_SESSION="zsh-$$-$EPOCHSECONDS"
+# flashback (M8b) needs the CLI — resolved relative to this file at source time
+_BB_CLI="${${(%):-%x}:A:h:h}/cli/blackbox.js"
+[[ -f "$_BB_CLI" ]] || _BB_CLI=""
 # noise commands skipped shell-side; the daemon applies config.ignore authoritatively
 : ${BLACKBOX_IGNORE:="cd ls ll la pwd clear exit history bg fg jobs which"}
 
@@ -30,6 +33,18 @@ _bb_json_escape() {
   s=${s//[[:cntrl:]]/}
   print -rn -- "$s"
 }
+
+# flashback (M8b): failed command → async hint from past events. The disowned
+# subshell returns in ~1ms; the node side prints only on a confident match and
+# is silent on every failure mode (Supermemory down, low similarity, disabled).
+# 130 = SIGINT: the user aborting a command is not a failure worth a hint.
+_bb_flashback() {
+  [[ -z "$_BB_CLI" || -n "$BLACKBOX_NO_FLASHBACK" ]] && return 0
+  (( $1 == 0 || $1 == 130 )) && return 0
+  ( command node "$_BB_CLI" _flashback --exit "$1" --cwd "$PWD" -- "$2" \
+      </dev/null >>"${BLACKBOX_FLASHBACK_OUT:-/dev/tty}" 2>/dev/null & ) >/dev/null 2>&1
+  return 0
+} 2>/dev/null
 
 _bb_preexec() {
   [[ -z "$1" ]] && return 0
@@ -53,6 +68,7 @@ _bb_precmd() {
 
   if [[ -n "$BLACKBOX_RECORD" ]]; then
     print -rn -- $'\x1e'"BB1;E;${exit_code};${EPOCHREALTIME}"$'\x1e\n\e[1A\e[2K' 2>/dev/null
+    _bb_flashback "$exit_code" "$cmd"
     return 0
   fi
 
@@ -70,6 +86,7 @@ _bb_precmd() {
     print -rn -- "{\"v\":1,\"source\":\"terminal\",\"ts_epoch\":${EPOCHREALTIME},\"session_id\":\"${_BB_SESSION}\",\"cwd\":\"$(_bb_json_escape "$PWD")\",\"command\":\"$(_bb_json_escape "$cmd")\",\"exit_code\":${exit_code},\"duration_ms\":${dur_ms}}" > "$_BB_SPOOL_TMP/$f" \
       && mv "$_BB_SPOOL_TMP/$f" "$_BB_SPOOL_NEW/$f"
   } 2>/dev/null
+  _bb_flashback "$exit_code" "$cmd"
   return 0
 } 2>/dev/null
 
