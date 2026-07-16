@@ -11,8 +11,14 @@ export async function run() {
   if (await alive(cfg)) {
     console.log(`supermemory local: already up on ${cfg.baseURL}`);
   } else {
-    const res = await startSupermemory(cfg); // throws with log path on failure
-    console.log(`supermemory local: up on ${cfg.baseURL} (pid ${res.pid})`);
+    try {
+      const res = await startSupermemory(cfg); // throws with log path on failure
+      console.log(`supermemory local: up on ${cfg.baseURL} (pid ${res.pid})`);
+    } catch (err) {
+      console.error(`blackbox up: ${err.message}`);
+      console.error('(capture still works — spooled events drain once the server is up)');
+      process.exit(1);
+    }
   }
 
   const pid = daemonPid();
