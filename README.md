@@ -8,6 +8,7 @@
 
 Terminal commands · AI-agent sessions · git commits — recorded, correlated, searchable by meaning.
 
+<a href="https://www.npmjs.com/package/@prithidevghosh/blackbox"><img alt="npm: @prithidevghosh/blackbox" src="https://img.shields.io/npm/v/%40prithidevghosh%2Fblackbox?logo=npm&label=npm&color=CB3837"></a>
 <img alt="tests: 50 unit + e2e" src="https://img.shields.io/badge/tests-50_unit_+_e2e-2ea44f">
 <img alt="privacy: 100% local" src="https://img.shields.io/badge/privacy-100%25_local-F04E00">
 <img alt="node ≥ 20" src="https://img.shields.io/badge/node-%E2%89%A5_20-339933?logo=nodedotjs&logoColor=white">
@@ -98,20 +99,22 @@ $ blackbox ask "..." --explain            # grounded answer, local LLM, cited
 > [Ollama](https://ollama.com) recommended for the LLM features
 > (everything else works without it).
 
+Install from [npm](https://www.npmjs.com/package/@prithidevghosh/blackbox) — no clone needed:
+
 ```bash
-git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
-./install.sh          # deps + `blackbox setup`: starts Supermemory Local + daemon,
-                      # adds hooks to ~/.zshrc (marked block, easy to remove)
+npm install -g @prithidevghosh/blackbox
+blackbox setup        # one-time: config, Supermemory Local, Ollama model,
+                      # zsh hooks in ~/.zshrc (marked block, easy to remove)
 exec zsh              # reload your shell
 blackbox status       # all green?
 blackbox init         # inside any repo whose commits you want recorded
 ```
 
-Or npm-style, no clone needed (same result — `install.sh` is just a wrapper around this):
+Or from a clone (same result — `install.sh` is a thin wrapper around `blackbox setup`):
 
 ```bash
-npm install -g @prithidevghosh/blackbox
-blackbox setup        # one-time: config, Supermemory Local, Ollama model, zsh hooks
+git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
+./install.sh
 ```
 
 Setup is one-time. After a reboot, `blackbox up` restarts Supermemory Local +
