@@ -18,14 +18,30 @@ export async function run() {
   const p = paths();
   console.log(bold('blackbox status\n'));
 
-  // supermemory
+  // supermemory — total + per-source counts prove real multi-source ingestion
   if (await alive(cfg)) {
     let docCount = '?';
+    const bySource = {};
+    let processing = 0;
     try {
-      const list = await listDocuments(cfg, { containerTags: [cfg.containerTag], limit: 1 });
-      docCount = list.pagination?.totalItems ?? '?';
+      for (let page = 1; page <= 20; page++) {
+        const list = await listDocuments(cfg, { containerTags: [cfg.containerTag], limit: 100, page });
+        docCount = list.pagination?.totalItems ?? '?';
+        const docs = list.memories || [];
+        for (const d of docs) {
+          const src = d.metadata?.source || 'other';
+          bySource[src] = (bySource[src] || 0) + 1;
+          if (d.status !== 'done' && d.status !== 'failed') processing++;
+        }
+        if (docs.length < 100) break;
+      }
     } catch {}
+    const srcLine = ['terminal', 'agent', 'git']
+      .map((s) => `${s} ${bySource[s] || 0}`)
+      .concat(bySource.other ? [`other ${bySource.other}`] : [])
+      .join(' · ');
     console.log(ok(`supermemory local     ${cfg.baseURL} — up, ${docCount} documents in '${cfg.containerTag}'`));
+    console.log(ok(`  by source           ${srcLine}${processing ? yellow(`  (${processing} still processing)`) : ''}`));
   } else {
     console.log(bad(`supermemory local     ${cfg.baseURL} — unreachable (capture still works; events wait in the spool)`));
   }
@@ -47,6 +63,14 @@ export async function run() {
     zshrc.includes('BEGIN BLACKBOX')
       ? ok('zsh hooks             installed in ~/.zshrc (new shells record commands)')
       : warn('zsh hooks             not installed — run install.sh')
+  );
+
+  // flashback (M8b)
+  const fb = cfg.flashback || {};
+  console.log(
+    fb.enabled === false
+      ? warn('flashback             disabled (flashback.enabled in config.json)')
+      : ok(`flashback             enabled — hints on failed commands at similarity ≥ ${fb.similarity_threshold ?? 0.72}`)
   );
 
   // agent transcript dirs
