@@ -1,0 +1,24 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- blackbox: like a real flight recorder, it's orange -->
+  <defs>
+    <clipPath id="box">
+      <rect x="8" y="8" width="144" height="144" rx="34"/>
+    </clipPath>
+    <linearGradient id="orange" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7A1A"/>
+      <stop offset="1" stop-color="#F04E00"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="144" height="144" rx="34" fill="url(#orange)"/>
+  <!-- reflective locator stripes, like the real thing -->
+  <g clip-path="url(#box)">
+    <path d="M112 0 L138 0 L62 160 L36 160 Z" fill="#FFFFFF" opacity="0.14"/>
+    <path d="M150 0 L163 0 L87 160 L74 160 Z" fill="#FFFFFF" opacity="0.14"/>
+  </g>
+  <!-- the recorded trace -->
+  <polyline points="30,80 54,80 65,52 80,108 92,63 100,92 108,80 121,80"
+    stroke="#18181B" stroke-width="9" fill="none"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- recording now -->
+  <circle cx="133" cy="80" r="6" fill="#FFFFFF"/>
+</svg>

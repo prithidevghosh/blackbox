@@ -1,6 +1,29 @@
-# blackbox 🛩️
+<div align="center">
+
+<img src="docs/assets/logo.svg" width="130" alt="blackbox logo — an orange flight recorder with a signal trace">
+
+# blackbox
 
 **A fully local flight recorder for modern dev work.**
+
+Terminal commands · AI-agent sessions · git commits — recorded, correlated, searchable by meaning.
+
+<img alt="tests: 45 unit + e2e" src="https://img.shields.io/badge/tests-45_unit_+_e2e-2ea44f">
+<img alt="privacy: 100% local" src="https://img.shields.io/badge/privacy-100%25_local-F04E00">
+<img alt="node >= 20" src="https://img.shields.io/badge/node-%E2%89%A5_20-339933?logo=nodedotjs&logoColor=white">
+<img alt="platform: macOS | Linux" src="https://img.shields.io/badge/platform-macOS_·_Linux-555">
+<a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+
+[Quickstart](#quickstart) ·
+[Why](#why-blackbox) ·
+[Commands](#commands) ·
+[How it works](#how-it-works) ·
+[Privacy](#privacy--what-never-leaves-your-machine) ·
+[Comparison](#how-it-compares)
+
+</div>
+
+---
 
 Your day leaves three trails that evaporate: terminal commands (with the output
 that actually mattered), AI coding-agent sessions (the reasoning that found the
@@ -28,7 +51,39 @@ $ blackbox ask "authentication problem with redis"
 ```
 
 Note the query said *"authentication problem"* — the recorded event says
-*"NOAUTH"*. That's the point.
+*"NOAUTH"*. **That's the point.**
+
+## Why blackbox?
+
+- **⚡ Flashback — recall before you ask.** When a failure repeats, a hint lands
+  right under the failed command: how often you've hit it, and the commit that
+  fixed it. Any terminal, no editor required.
+
+  ```console
+  $ redis-cli PING
+  (error) NOAUTH Authentication required.
+  ⚡ flashback: seen 2× before — last 2h ago [terminal] ✗ exit 12
+     $ redis-cli PING → (error) NOAUTH Authentication required.
+     fix (git, 1h ago): fix: PROJ-123 pass redis password to cache client
+  ```
+
+- **🧠 Semantic recall.** "auth problem" finds `NOAUTH`. Search by what you
+  mean, not what you typed.
+
+- **📝 Synthesis, not just search.** `blackbox standup` drafts your
+  Worked on / Fixed / Blocked; `blackbox rca PROJ-123` drafts a root-cause
+  analysis with a cross-source timeline and cited evidence — all on a local LLM.
+
+- **🤖 Your AI agent's work is part of your work.** Claude Code and Codex
+  transcripts are captured live and correlated with the commands and commits
+  around them.
+
+- **🔒 Nothing leaves your machine.** Local embeddings, local generation
+  (Ollama), secrets redacted *before* ingestion. No cloud APIs, no telemetry.
+  Details in [Privacy](#privacy--what-never-leaves-your-machine).
+
+- **🪶 Invisible until you need it.** <3 ms per command on the shell hot path,
+  and every component fails soft — a broken pipeline can never break your prompt.
 
 ```console
 $ blackbox rca PROJ-123 --out rca.md      # drafted RCA: summary, timeline,
@@ -37,27 +92,11 @@ $ blackbox standup --since 24h            # Worked on / Fixed / Blocked
 $ blackbox ask "..." --explain            # grounded answer, local LLM, cited
 ```
 
-And when a failure repeats, blackbox tells you *before you ask* — a ⚡ flashback
-hint lands under the failed command with how often you've hit it and the commit
-that fixed it, in any terminal, no editor required:
+## Quickstart
 
-```console
-$ redis-cli PING
-(error) NOAUTH Authentication required.
-⚡ flashback: seen 2× before — last 2h ago [terminal] ✗ exit 12
-   $ redis-cli PING → (error) NOAUTH Authentication required.
-   fix (git, 1h ago): fix: PROJ-123 pass redis password to cache client
-```
-
-**Nothing leaves your machine.** No cloud APIs, no telemetry. Other tools
-remember your bugs inside one editor; blackbox remembers your *work* —
-including what your AI agent did — in any terminal, any editor, fully local.
-See [Privacy](#privacy-what-never-leaves-your-machine).
-
-## 60-second quickstart
-
-Prereqs: macOS (or Linux) with zsh, Node ≥ 20, git. [Ollama](https://ollama.com)
-recommended for the LLM features (everything else works without it).
+> **Prereqs:** macOS (or Linux) with zsh, Node ≥ 20, git.
+> [Ollama](https://ollama.com) recommended for the LLM features
+> (everything else works without it).
 
 ```bash
 git clone https://github.com/prithidevghosh/blackbox.git && cd blackbox
@@ -80,7 +119,20 @@ Verify the whole pipeline without doing any work:
 npm run test:all      # 45 unit tests + autonomous end-to-end harness
 ```
 
-## Architecture
+## Commands
+
+| Command | What it does |
+|---|---|
+| `blackbox ask "<q>" [--explain] [--limit N]` | Semantic search over everything; `--explain` = grounded local-LLM answer with citations |
+| `blackbox standup [--since 24h] [--no-llm]` | Worked on / Fixed / Blocked draft |
+| `blackbox rca <TICKET> [--out rca.md] [--no-llm]` | Cross-source timeline + drafted root-cause analysis |
+| `blackbox record` | Subshell where command **output** is captured (≤8 KB head+tail per command) |
+| `blackbox flashback "<command>" [--exit N]` | Preview the ⚡ hint a failing command would get (the zsh hook fires this automatically) |
+| `blackbox init` | Record commits of the current repo (opt-in) |
+| `blackbox status` | Health of every component |
+| `blackbox ingest-daemon [--daemonize\|--stop\|--once]` | The spool → Supermemory pipeline |
+
+## How it works
 
 ```
   ┌────────────────┐   ┌──────────────────────┐   ┌─────────────────┐
@@ -166,20 +218,10 @@ Scope is the difference: bug trackers remember bugs, journals remember what you
 wrote down; blackbox records the whole workday — commands with output, AI-agent
 sessions, commits — and synthesizes answers from it.
 
-## Commands
+## Configuration
 
-| command | what it does |
-|---|---|
-| `blackbox ask "<q>" [--explain] [--limit N]` | semantic search over everything; `--explain` = grounded local-LLM answer with citations |
-| `blackbox standup [--since 24h] [--no-llm]` | Worked on / Fixed / Blocked draft |
-| `blackbox rca <TICKET> [--out rca.md] [--no-llm]` | cross-source timeline + drafted root-cause analysis |
-| `blackbox record` | subshell where command **output** is captured (≤8 KB head+tail per command) |
-| `blackbox flashback "<command>" [--exit N]` | preview the ⚡ hint a failing command would get (the zsh hook fires this automatically) |
-| `blackbox init` | record commits of the current repo (opt-in) |
-| `blackbox status` | health of every component |
-| `blackbox ingest-daemon [--daemonize\|--stop\|--once]` | the spool → Supermemory pipeline |
-
-## Configuration (`~/.blackbox/config.json`)
+<details>
+<summary><code>~/.blackbox/config.json</code> — every knob, with defaults</summary>
 
 ```jsonc
 {
@@ -201,6 +243,8 @@ sessions, commits — and synthesizes answers from it.
 }
 ```
 
+</details>
+
 ## Testing
 
 ```bash
@@ -221,27 +265,40 @@ too: an unrelated failing command must produce **total silence**, so must an
 unreachable Supermemory, and prompt latency with flashback enabled must be
 indistinguishable from disabled (the hook stays async).
 
+<details>
+<summary>Harness notes (backlog abort, pointing at another instance)</summary>
+
 The harness aborts early with an explanation if Supermemory is mid-backlog
 (each document costs ~1 min of local-LLM time to fully process) — pause your
 own capture with `blackbox ingest-daemon --stop` and re-run once it drains.
 `BLACKBOX_E2E_BASEURL` points the harness at a different Supermemory instance.
 
+</details>
+
 ## Notes & known limits
 
 - Codex CLI support is written against the documented rollout format with
   fixture tests, but was not verified against a live Codex install (none on the
-  dev machine — see `DECISIONS.md` D4). Claude Code support is verified against
-  real transcripts.
+  dev machine — see [DECISIONS.md](DECISIONS.md) D4). Claude Code support is
+  verified against real transcripts.
 - `blackbox record` needs `script(1)` (present on macOS and util-linux).
   Passive capture (commands, exit codes, durations — no output) needs only zsh.
 - Search uses `/v3/search`; on Supermemory Local 0.0.5, `/v4/search` covers
-  extracted memories, not raw documents (see `docs/api-notes.md`).
+  extracted memories, not raw documents (see [docs/api-notes.md](docs/api-notes.md)).
 - bash hooks: not shipped yet; the zsh implementation is the reference.
 
-Docs: [docs/api-notes.md](docs/api-notes.md) (observed API + transcript formats) ·
-[DECISIONS.md](DECISIONS.md) (choices + reasoning)
+## Docs
 
-## License
+- [docs/api-notes.md](docs/api-notes.md) — observed Supermemory API + agent transcript formats
+- [DECISIONS.md](DECISIONS.md) — design choices and the reasoning behind them
 
-[MIT](LICENSE). Issues and PRs welcome — `npm run test:all` must stay green
-(the e2e harness needs Supermemory Local running on :6767).
+## Contributing & license
+
+Issues and PRs welcome — `npm run test:all` must stay green (the e2e harness
+needs Supermemory Local running on `:6767`).
+
+[MIT](LICENSE).
+
+<div align="center">
+<sub>Like a real flight recorder, the logo is orange — black boxes never were black.</sub>
+</div>
