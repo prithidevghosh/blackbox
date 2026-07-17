@@ -132,6 +132,15 @@ Notes:
 - Generation via `POST /api/generate` `{"model":"llama3.2:3b","prompt":"...","stream":false}`
   (raw fetch, no SDK).
 
+## Supermemory Local — port + data dir (observed, binary strings + live boot)
+
+- `PORT` or `SUPERMEMORY_PORT` env sets the listen port (default 6767);
+  `SUPERMEMORY_DATA_DIR` sets the data dir (default `./.supermemory` — i.e.
+  **cwd-relative**, so always set it explicitly or the server litters the cwd).
+- Verified live: a second isolated instance on :6868 with its own data dir
+  boots in ~25s and serves /v3 endpoints — this is how the e2e suite avoids
+  fighting the user's real store (`BLACKBOX_E2E_BASEURL`).
+
 ## Claude Code transcripts (verified on this machine)
 
 - **Location:** `~/.claude/projects/<munged-project-path>/<session-uuid>.jsonl`

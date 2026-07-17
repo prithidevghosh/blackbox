@@ -65,7 +65,7 @@ Note the query said *"authentication problem"* — the recorded event says
   (error) NOAUTH Authentication required.
   ⚡ flashback: seen 2× before — last 2h ago [terminal] ✗ exit 12
      $ redis-cli PING → (error) NOAUTH Authentication required.
-     fix (git, 1h ago): fix: PROJ-123 pass redis password to cache client
+     fix (git, 1h ago): fix: PROJ-123 pass redis password to cache client ✓ still current
   ```
 
 - **🧠 Semantic recall.** "auth problem" finds `NOAUTH`. Search by what you
@@ -92,6 +92,70 @@ $ blackbox rca PROJ-123 --out rca.md      # drafted RCA: summary, timeline,
 $ blackbox standup --since 24h            # Worked on / Fixed / Blocked
 $ blackbox ask "..." --explain            # grounded answer, local LLM, cited
 ```
+
+## Memory you can act on, and memory you can trust
+
+Two features that change what "agent memory" means:
+
+### 🛡 guard — push-based memory for your AI agent
+
+Every agent-memory tool today is **pull-based**: the agent has to decide to
+query its memory. But an agent about to repeat a past mistake doesn't know it
+should ask — that's what makes it a repeat. guard closes that gap by being
+**push-based**: it intercepts the agent's Bash command *before execution*
+(a Claude Code PreToolUse hook) and injects the relevant past failure into its
+context automatically. It is ⚡ flashback, for the agent.
+
+```console
+$ blackbox guard install      # adds the hook to ~/.claude/settings.json
+                              # (marked entry; `guard uninstall` removes exactly it)
+```
+
+When Claude is about to run something that failed before, it sees:
+
+```
+blackbox guard: this command failed before on 2026-07-15 (repo payments-worker, exit 12): (error) NOAUTH Authentication required.
+fix at the time (git, 2026-07-15): fix: PROJ-123 pass redis password to cache client [✓ still current]
+recorded in session record-42 — advisory only; details: blackbox ask "npm run dev"
+```
+
+…and skips the twenty minutes of rediscovery. Guarantees, in order of holiness:
+
+- **Never blocks.** Advise-only: guard adds context; the permission flow and
+  the command are untouched (it never emits a `permissionDecision`).
+- **Fail-open.** No match, low confidence, store down, any error, or an 800ms
+  budget exceeded → silent allow. A broken guard is indistinguishable from no
+  guard.
+- **No nagging.** Same command in the same session warns at most once.
+
+### 🕰 staleness — memories checked against reality at retrieval
+
+A remembered fix goes stale the moment the world changes — the config gets
+refactored, the dependency gets upgraded — and no memory system today knows
+when its own memories have been invalidated by later events. blackbox does
+**lazy invalidation**: every fix memory is checked against the repo's git
+history *at retrieval time*, never trusted blindly.
+
+For each retrieved fix, blackbox derives its **evidence paths** (files changed
+in the fix commit + file paths named in the memory that still exist), then runs
+one bounded `git log --since=<memory time>` over them:
+
+- untouched since the fix → `✓ still current`
+- touched → `⚠ possibly stale — ops/redis.conf changed 2 commit(s) after this fix (a1b2c3d)`
+- lockfile / compose file drifted since → the warning names the dependency drift
+
+This runs in `ask`, ⚡ flashback, and guard, adds ≤150 ms to a query, and on any
+error says **nothing** — an absent annotation over a wrong claim, always.
+
+When several fixes for the same error are retrieved, the **newest wins** and is
+annotated `supersedes fix from <older date>`. Memory stays append-only — ranking
+does the invalidation, nothing is deleted.
+
+*Future work:* event-driven invalidation — re-checking memories when new events
+are *ingested* (a commit touching evidence paths marks dependents stale at
+write time), instead of only at read time. Named here, deliberately not built
+yet: the lazy check already guarantees you never act on a silently outdated
+memory.
 
 ## Quickstart
 
@@ -142,6 +206,7 @@ npm run test:all      # 50 unit tests + autonomous end-to-end harness
 | `blackbox rca <TICKET> [--out rca.md] [--no-llm]` | Cross-source timeline + drafted root-cause analysis |
 | `blackbox record` | Subshell where command **output** is captured (≤8 KB head+tail per command) |
 | `blackbox flashback "<command>" [--exit N]` | Preview the ⚡ hint a failing command would get (the zsh hook fires this automatically) |
+| `blackbox guard install\|uninstall\|status` | Warn Claude Code about past failures *before* a Bash command runs (PreToolUse hook; advise-only, fail-open) |
 | `blackbox init` | Record commits of the current repo (opt-in) |
 | `blackbox status` | Health of every component |
 | `blackbox setup` | One-time setup: config, Supermemory Local binary, Ollama model, zsh hooks |
@@ -225,6 +290,8 @@ journals, or editor-bound bug recall:
 | Cross-stream correlation (repo/branch/ticket) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Semantic search ("auth problem" finds NOAUTH) | ✅ everything | ❌ Ctrl-R | ❌ substring/fuzzy | ❌ | ✅ what you wrote | ✅ bugs |
 | Proactive recall on failure        | ✅ ⚡ flashback, any terminal | ❌ | ❌ | ❌ | ❌ | ✅ in-editor |
+| Warns the AI agent **before** it repeats a mistake | ✅ 🛡 guard, push-based | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Detects when a remembered fix went stale | ✅ 🕰 checked against git at retrieval | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Synthesis (standup / RCA drafts)   | ✅ local LLM | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Fully local generation (no cloud LLM) | ✅ Ollama | — | — | ❌ cloud model | — | ❌ cloud LLM API |
 | Editor-agnostic                    | ✅ any terminal, any editor | ✅ | ✅ | ✅ | ✅ | ❌ one editor |
@@ -250,6 +317,12 @@ sessions, commits — and synthesizes answers from it.
   "flashback": { "enabled": true, "similarity_threshold": 0.72 },  // ⚡ hints on
                                         // failed commands; threshold calibrated
                                         // empirically (DECISIONS.md D9)
+  "guard": { "enabled": true, "threshold": 0.65, "timeout_ms": 800 },
+                                        // pre-command warnings for Claude Code;
+                                        // lower threshold than flashback because
+                                        // guard sees near-miss variants and has a
+                                        // binary/subcommand gate (DECISIONS.md D7);
+                                        // timeout_ms = hard cap on the whole hook
   "ticketRegex": "[A-Z][A-Z0-9]+-\\d+", // PROJ-123 style; customize per tracker
   "jiraBaseURL": "",                    // optional, for future ticket enrichment
   "agents": {
@@ -302,6 +375,11 @@ own capture with `blackbox ingest-daemon --stop` and re-run once it drains.
 - Search uses `/v3/search`; on Supermemory Local 0.0.5, `/v4/search` covers
   extracted memories, not raw documents (see [docs/api-notes.md](docs/api-notes.md)).
 - bash hooks: not shipped yet; the zsh implementation is the reference.
+- guard covers Claude Code's Bash tool (the PreToolUse contract was verified
+  live — see [docs/api-notes.md](docs/api-notes.md)); other agents/tools are
+  allowed through untouched.
+- Staleness checking is git-based: fix memories whose repo has moved or lost
+  its history simply lose the annotation (silence over wrong claims).
 
 ## Docs
 
