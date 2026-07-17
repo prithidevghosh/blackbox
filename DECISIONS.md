@@ -147,3 +147,20 @@ result metadata (`metadata.ts`), and shows a correlated git commit when one
 also clears the threshold — the cross-stream story in one glance. Enabled in
 `record` mode too (the demo runs there); the hint may land in the typescript
 between command sentinels, which the record parser already tolerates.
+
+## D5 — guard hook output: additionalContext with NO permissionDecision
+
+**Options:** (a) `permissionDecision:"allow"` + `additionalContext`;
+(b) `permissionDecision:"defer"` + `additionalContext`; (c) `additionalContext`
+alone, no decision field.
+
+**Observed (Claude Code 2.1.205, live headless runs):** (a) works but skips the
+user's permission prompt for that call — guard would silently widen what the
+agent may run, violating "never break the user's agent". (b) is documented but
+broken: the session died silently after tool_use (no result, no reply, exit 0).
+(c) works exactly as needed: context injected, surfaced to the model as
+`PreToolUse:Bash hook additional context: …`, normal permission flow untouched.
+
+**Decision:** guard emits shape (c) only, and exits 0 silently in every other
+case (no match, low confidence, timeout, supermemory down, parse error).
+Raw payloads in docs/api-notes.md.

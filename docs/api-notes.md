@@ -168,3 +168,70 @@ the open-source Codex CLI repo (rollout files
 `{timestamp, type: "session_meta" | "response_item" | ..., payload}`), with a
 hand-built fixture, and is clearly flagged as best-effort until verified against
 a real installation. Claude Code is the verified, demo-ready path.
+
+## Claude Code PreToolUse hooks (verified on this machine, Claude Code 2.1.205)
+
+Verified live: registered a stdin-capturing hook in a scratch project's
+`.claude/settings.json`, ran a headless session (`claude -p`), observed both
+directions of the contract. Docs source: code.claude.com/docs hooks reference.
+
+### Settings registration (observed working)
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "/abs/path/to/hook" } ] }
+    ]
+  }
+}
+```
+
+- `matcher` filters by tool name; `"Bash"` fires only for Bash. `timeout` field
+  (seconds) is supported per docs; default 600s — we enforce our own 800ms cap
+  inside the hook instead of relying on it.
+- Hooks merge across user/project/local settings files; all matching entries run.
+
+### stdin JSON delivered to the hook (captured verbatim, 2.1.205)
+
+```json
+{"session_id":"e590d6da-…","transcript_path":"/Users/…/<session>.jsonl",
+ "cwd":"/private/tmp/…/hookverify","prompt_id":"505ceaa2-…",
+ "permission_mode":"default","hook_event_name":"PreToolUse",
+ "tool_name":"Bash",
+ "tool_input":{"command":"echo hook-verify-123","description":"Run the specified echo command"},
+ "tool_use_id":"toolu_01XDu6c8…"}
+```
+
+- `tool_input.command` is the Bash command string. `tool_input.description` also
+  present for Bash. `tool_use_id` present (not in the docs' example). No `effort`
+  field observed in this run — treat every field beyond `tool_name`/`tool_input`
+  as optional.
+- `session_id` is stable per session → our dedupe key.
+
+### Output contract (verified live)
+
+- **Silent allow:** exit 0 with no stdout → normal permission flow, command runs.
+  This is guard's fail-open path for every error/timeout/no-match case.
+- **Inject context, no permission decision (guard's shape — verified):**
+  exit 0 with stdout JSON:
+
+```json
+{"hookSpecificOutput":{
+  "hookEventName":"PreToolUse",
+  "additionalContext":"…the warning text…"}}
+```
+
+  Observed effect: the Bash command still executed through the NORMAL permission
+  flow, and Claude received the text, surfaced to the model as
+  `PreToolUse:Bash hook additional context: <additionalContext>`.
+  Claude quoted and acted on it in the reply — the injection channel works with
+  zero permission side effects.
+- **`permissionDecision:"allow"` + additionalContext** also verified working,
+  BUT it bypasses the permission prompt for that call — guard does not use it.
+- **`permissionDecision:"defer"` + additionalContext is BROKEN on 2.1.205**
+  despite being documented: the headless session died silently right after the
+  tool_use (no tool result, no reply, exit 0, empty stdout). Never emit `defer`.
+- **Blocking** (`permissionDecision:"deny"` or exit 2) exists but guard NEVER
+  uses it — advise-only by design.
