@@ -6,7 +6,8 @@
 // can delay the prompt; staying silent is what keeps failure modes invisible.
 import { loadConfig } from '../../lib/config.js';
 import { search } from '../../lib/supermemory.js';
-import { selectMatches, formatHint } from '../../lib/flashback.js';
+import { selectMatches, formatHint, hitContent, pickFixFromResults } from '../../lib/flashback.js';
+import { rootCauseLine } from '../../lib/guard.js';
 
 export function parseArgs(args) {
   const out = { command: [], exit: 1, cwd: '' };
@@ -27,8 +28,21 @@ export async function run(args) {
     const cfg = loadConfig();
     const fb = cfg.flashback || {};
     if (fb.enabled === false || !command || exit === 0 || exit === 130) return;
+    const threshold = fb.similarity_threshold ?? 0.72;
     const res = await search(cfg, command, { limit: 8, containerTags: [cfg.containerTag] }, 2500);
-    const matches = selectMatches(res.results, fb.similarity_threshold ?? 0.72);
+    const matches = selectMatches(res.results, threshold);
+    // D8: the command text alone often misses the fix commit — retry with the
+    // failure's own error line before giving up on the fix line
+    if (!matches.gitFix && matches.hits.length) {
+      const err = rootCauseLine(hitContent(matches.hits[0]));
+      if (err) {
+        // wider limit: the error text also matches many terminal/agent docs,
+        // which would crowd every git result out of a top-8
+        const res2 = await search(cfg, `fix ${err}`, { limit: 16, containerTags: [cfg.containerTag] }, 2500);
+        const { fix, supersedes } = pickFixFromResults(res2.results, threshold);
+        if (fix) Object.assign(matches, { gitFix: fix, supersedes });
+      }
+    }
     // Feature B: check the fix against reality before showing it (≤150ms; any
     // problem just omits the annotation — formatting never depends on it)
     let fixNote = null;

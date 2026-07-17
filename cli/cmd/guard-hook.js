@@ -15,7 +15,9 @@ import {
   formatGuardContext,
   alreadyInjected,
   markInjected,
+  rootCauseLine,
 } from '../../lib/guard.js';
+import { hitContent, pickFixFromResults } from '../../lib/flashback.js';
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -47,6 +49,20 @@ export async function run() {
     const res = await search(cfg, command, { limit: 8, containerTags: [cfg.containerTag] }, budget);
     const match = selectGuardMatch(res.results, command, cfg.guard?.threshold ?? 0.65);
     if (!match) process.exit(0);
+
+    // D8: command text alone often misses the fix commit — one more search on
+    // the failure's error line, inside whatever budget remains
+    if (!match.gitFix) {
+      const left = cap - (Date.now() - t0) - 120;
+      const err = rootCauseLine(hitContent(match.hit));
+      if (err && left > 60) {
+        // wider limit: the error text also matches many terminal/agent docs,
+        // which would crowd every git result out of a top-8
+        const res2 = await search(cfg, `fix ${err}`, { limit: 16, containerTags: [cfg.containerTag] }, left);
+        const { fix, supersedes } = pickFixFromResults(res2.results, cfg.guard?.threshold ?? 0.65);
+        if (fix) Object.assign(match, { gitFix: fix, supersedes });
+      }
+    }
 
     // Feature B: staleness check on the fix within whatever budget remains
     // (the hard-cap timer still guarantees the overall deadline)

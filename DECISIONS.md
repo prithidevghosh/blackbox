@@ -196,3 +196,14 @@ which land ~0.68-0.70. 0.65 splits the measured gap, and guard has a second
 independent filter flashback lacks: the binary/subcommand gate, so a false
 positive needs an unrelated command that BOTH scores >0.65 against a failure
 AND shares binary+subcommand with it — at which point it is arguably related.
+
+## D8 — fix lookup via error context (flashback + guard)
+
+A bare failing command ("npm run dev") embeds far from its fix commit's message
+("fix(redis): sync REDIS_PASSWORD…"), so the single command-text search often
+finds the past failure but not the fix. Measured live: command query put the
+fix commit below 0.55 while `fix <error line>` put it at 0.73. When the first
+search yields hits but no git fix, both flashback and guard now run ONE extra
+search seeded with the failure's own root-cause line and accept the newest git
+result above the same threshold. Cost: one extra local search (~100ms) only on
+the miss path; guard still enforces its overall hard cap.
