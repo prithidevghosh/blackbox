@@ -164,3 +164,19 @@ broken: the session died silently after tool_use (no result, no reply, exit 0).
 **Decision:** guard emits shape (c) only, and exits 0 silently in every other
 case (no match, low confidence, timeout, supermemory down, parse error).
 Raw payloads in docs/api-notes.md.
+
+## D6 — guard install: user-level settings, absolute-path hook command
+
+**Options:** (a) project `.claude/settings.json`; (b) user `~/.claude/settings.json`.
+Chose (b): guard should protect every repo the user works in, matching how the
+memory itself is global. Overridable via BLACKBOX_CLAUDE_SETTINGS (tests use it).
+
+Hook command is `"<abs node>" "<abs cli/blackbox.js>" guard-hook`, not bare
+`blackbox`: Claude Code GUI sessions don't inherit the shell PATH, and a
+PATH-miss would fail silently forever. Cost: reinstalling blackbox elsewhere
+needs `guard install` again (idempotent, cheap).
+
+JSON has no comments, so the "marked removable block" is the `guard-hook` token
+in the entry's command string — install is merge-only + idempotent, uninstall
+filters exactly those entries and prunes empty containers, unparseable settings
+abort untouched.

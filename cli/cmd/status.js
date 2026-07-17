@@ -73,6 +73,19 @@ export async function run() {
       : ok(`flashback             enabled — hints on failed commands at similarity ≥ ${fb.similarity_threshold ?? 0.72}`)
   );
 
+  // guard (Feature A): Claude Code PreToolUse hook
+  try {
+    const { settingsPath, guardInstalled } = await import('./guard.js');
+    let installed = false;
+    try {
+      installed = guardInstalled(JSON.parse(fs.readFileSync(settingsPath(), 'utf8')));
+    } catch {}
+    const gEnabled = cfg.guard?.enabled !== false;
+    if (installed && gEnabled) console.log(ok(`guard                 on — warns Claude Code about past failures before Bash commands (threshold ≥ ${cfg.guard?.threshold ?? 0.72})`));
+    else if (installed) console.log(warn('guard                 hook installed but disabled in config.json (guard.enabled)'));
+    else console.log(warn('guard                 off — run: blackbox guard install'));
+  } catch {}
+
   // agent transcript dirs
   for (const [name, a] of Object.entries(cfg.agents || {})) {
     if (a.enabled === false) continue;
