@@ -156,6 +156,20 @@ async function main() {
   check('terminal commands recorded with output', termEvents.length >= 2, `${termEvents.length} events`);
   check('failure event captured (exit 12 + NOAUTH output)', !!failEv && /NOAUTH Authentication required/.test(failEv.output || ''));
 
+  // guard seed: the failure the agent will be warned about (npm binary so the
+  // guard's binary/subcommand gate has something real to match)
+  const guardSeedTs = new Date(Date.now() - 2 * 86_400_000); // "Tuesday's failure"
+  sh('node', [cli, '_spool', JSON.stringify({
+    source: 'terminal',
+    command: 'npm run dev',
+    output: '(error) NOAUTH Authentication required.\nredis connection refused for worker',
+    exit_code: 12,
+    cwd: repoDir,
+    session: 'record-e2e-guard-seed',
+    ts: guardSeedTs.toISOString(),
+    ts_epoch: Math.floor(guardSeedTs.getTime() / 1000),
+  })]);
+
   // ── daemon up (agent watcher + ingest) ───────────────────────
   console.log('\n[stage daemon + agent replay]');
   daemon = spawn('node', [cli, 'ingest-daemon'], { env, stdio: ['ignore', 'inherit', 'inherit'] });
@@ -185,14 +199,14 @@ async function main() {
   });
   check('daemon drained the spool', drained, drained ? '' : `${fs.readdirSync(spoolNew).length} left`);
 
-  const EXPECTED_MIN = 7; // 1 git + 2 terminal + 4 agent
+  const EXPECTED_MIN = 8; // 1 git + 2 terminal + 1 guard seed + 4 agent
   const allDone = await waitFor(
     async () => {
       const list = await api('/v3/documents/list', { containerTags: [RUN_TAG], limit: 50 });
       const docs = list.memories || [];
       return docs.length >= EXPECTED_MIN && docs.every((d) => d.status === 'done' || d.status === 'failed');
     },
-    { timeoutMs: 300_000, stepMs: 3000, label: 'documents processed' }
+    { timeoutMs: 600_000, stepMs: 3000, label: 'documents processed' } // 8 docs × ~40-60s of local-LLM memory-agent time ÷ 2 workers
   );
   const list = await api('/v3/documents/list', { containerTags: [RUN_TAG], limit: 50 });
   const docs = list.memories || [];
@@ -315,6 +329,144 @@ async function main() {
   const msOn = avg(false);
   const msOff = avg(true);
   check('flashback: prompt latency imperceptible (enabled ≈ disabled)', msOn - msOff < 30, `median ${msOn.toFixed(1)}ms on vs ${msOff.toFixed(1)}ms off`);
+
+  // ── guard (Feature A): PreToolUse hook, crafted stdin ─────────
+  // Simulates exactly what Claude Code sends (schema verified live in
+  // docs/api-notes.md); asserts the advise-only + fail-open contract.
+  console.log('\n[stage guard]');
+  const hookStdin = (cmd, session) =>
+    JSON.stringify({
+      session_id: session,
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: cmd },
+      cwd: repoDir,
+    });
+  function guardHook(home, cmd, session) {
+    const t0 = Date.now();
+    const out = sh('node', [cli, 'guard-hook'], {
+      input: hookStdin(cmd, session),
+      env: { ...env, BLACKBOX_HOME: home },
+    });
+    return { out, ms: Date.now() - t0 };
+  }
+
+  // (1) semantically matching command → injected redis-auth context
+  const g1 = guardHook(fbHome, 'npm run dev -- --port 3000', 'e2e-guard-sess');
+  let g1json = null;
+  try { g1json = JSON.parse(g1.out); } catch {}
+  const g1ctx = g1json?.hookSpecificOutput?.additionalContext || '';
+  check(
+    'guard: matching command gets injected past-failure context',
+    /NOAUTH/.test(g1ctx) && /blackbox guard/.test(g1ctx) && g1json?.hookSpecificOutput?.hookEventName === 'PreToolUse',
+    g1ctx ? g1ctx.split('\n')[0] : `raw: ${g1.out.slice(0, 120) || '(empty)'}`
+  );
+  check(
+    'guard: advise-only — no permissionDecision, ≤3 lines',
+    g1json && !('permissionDecision' in (g1json.hookSpecificOutput || {})) && g1ctx.split('\n').length <= 3
+  );
+
+  // (2) same command, same session → deduped (silent)
+  const g2 = guardHook(fbHome, 'npm run dev -- --port 3000', 'e2e-guard-sess');
+  check('guard: repeat in same session is deduped to silence', g2.out === '');
+
+  // (3) unrelated command → silent allow
+  const g3 = guardHook(fbHome, 'terraform apply -auto-approve', 'e2e-guard-sess2');
+  check('guard: unrelated command allowed silently', g3.out === '');
+
+  // (4) supermemory down → silent allow within the hard cap
+  const g4 = guardHook(deadHome, 'npm run dev', 'e2e-guard-dead');
+  check('guard: supermemory down → silent allow within timeout', g4.out === '' && g4.ms < 2500, `${g4.ms}ms`);
+
+  // (5) live Claude Code session in the planted repo (only when claude exists)
+  const haveClaude = (() => {
+    try { sh('claude', ['--version']); return true; } catch { return false; }
+  })();
+  if (haveClaude && !process.env.BLACKBOX_E2E_SKIP_LIVE) {
+    const q = JSON.stringify;
+    fs.mkdirSync(path.join(repoDir, '.claude'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, '.claude', 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{
+            matcher: 'Bash',
+            hooks: [{ type: 'command', command: `BLACKBOX_HOME=${q(fbHome)} ${q(process.execPath)} ${q(cli)} guard-hook` }],
+          }],
+        },
+      }, null, 2)
+    );
+    const liveEnv = { ...env };
+    delete liveEnv.CLAUDECODE;
+    delete liveEnv.CLAUDE_CODE_ENTRYPOINT;
+    let liveOut = '';
+    try {
+      liveOut = execFileSync('claude', [
+        '-p', 'Run exactly this bash command: npm run dev — afterwards, report verbatim any hook-injected additional context you received during the session.',
+        '--allowedTools', 'Bash',
+        '--model', 'claude-haiku-4-5-20251001',
+      ], { encoding: 'utf8', cwd: repoDir, env: liveEnv, input: '', timeout: 180_000 });
+    } catch (err) {
+      liveOut = String(err.stdout || '') + String(err.stderr || '');
+    }
+    check(
+      'guard (live): Claude Code session received and referenced the injected context',
+      /blackbox guard/.test(liveOut) && /NOAUTH/.test(liveOut),
+      liveOut.slice(0, 160).replace(/\n/g, ' ')
+    );
+  } else {
+    console.log(`   guard live test skipped (${haveClaude ? 'BLACKBOX_E2E_SKIP_LIVE set' : 'claude not on PATH'})`);
+  }
+
+  // ── staleness (Feature B): fix memories checked against reality ──
+  console.log('\n[stage staleness]');
+  const askOut2 = (q) => sh('node', [cli, 'ask', q, '--limit', '8'], { cwd: repoDir });
+
+  // (a) nothing touched since the fix commit → "✓ still current"
+  const freshOut = askOut2('authentication problem with redis');
+  check(
+    'staleness: untouched fix is annotated "✓ still current"',
+    /\[git\]/.test(freshOut) && /✓ still current/.test(freshOut),
+    /✓ still current/.test(freshOut) ? '' : `git result present: ${/\[git\]/.test(freshOut)}`
+  );
+
+  // (b) a later commit touches the fix's evidence file → "⚠ possibly stale"
+  fs.appendFileSync(path.join(repoDir, 'cache.js'), '// tune timeouts\n');
+  git('add', '.');
+  git('commit', '-m', 'chore: bump cache timeout'); // deliberately un-ticketed: must NOT supersede
+  const staleOut = askOut2('authentication problem with redis');
+  check(
+    'staleness: evidence file changed after the fix → "⚠ possibly stale" naming it',
+    /⚠ possibly stale — cache\.js changed \d+ commit\(s\) after this fix \([0-9a-f]{7,}\)/.test(staleOut)
+  );
+  check('staleness: unrelated same-repo commit does not create a supersede note', !/supersedes fix from/.test(staleOut));
+
+  // (c) a second, newer fix for the same ticket → newest wins with supersede note
+  fs.appendFileSync(path.join(repoDir, 'cache.js'), '// rotate credentials on reconnect\n');
+  git('add', '.');
+  git('commit', '-m', 'fix: PROJ-123 rotate redis auth credentials after NOAUTH errors');
+  const gitDocsDone = await waitFor(
+    async () => {
+      const list = await api('/v3/documents/list', { containerTags: [RUN_TAG], limit: 50 });
+      const gits = (list.memories || []).filter((d) => d.metadata?.source === 'git');
+      return gits.length >= 3 && gits.every((d) => d.status === 'done' || d.status === 'failed');
+    },
+    { timeoutMs: 240_000, stepMs: 3000, label: 'new git commits processed' }
+  );
+  const supOut = gitDocsDone ? askOut2('authentication problem with redis') : '';
+  check(
+    'staleness: newer fix for the same ticket supersedes the older one',
+    /rotate redis auth/.test(supOut) && /supersedes fix from \d{4}-\d{2}-\d{2}/.test(supOut),
+    gitDocsDone ? '' : 'timed out waiting for git docs'
+  );
+
+  // (d) staleness path erroring (repo's git gone) → clean output, no annotation
+  fs.rmSync(path.join(repoDir, '.git'), { recursive: true, force: true });
+  const brokenOut = askOut2('authentication problem with redis');
+  check(
+    'staleness: corrupt repo → clean output with no staleness claim',
+    /NOAUTH/.test(brokenOut) && !/✓ still current/.test(brokenOut) && !/possibly stale/.test(brokenOut)
+  );
 
   // ── rca assertion (full rule-3) ───────────────────────────────
   if (process.env.E2E_THROUGH === 'ask') {

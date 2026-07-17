@@ -148,3 +148,12 @@ test('formatGuardContext (Feature B): fix line carries staleness + supersede ann
   assert.match(ctx, /supersedes fix from/);
   assert.ok(ctx.split('\n').length <= 3, 'still ≤3 lines');
 });
+
+test('formatGuardContext: root cause recovered from newline-collapsed chunk content', () => {
+  const collapsed = npmFail({
+    content:
+      'Terminal command (repo payments-worker, branch fix/PROJ-123-redis-auth): $ npm run dev (error) NOAUTH Authentication required. redis connection refused for worker FAILED with exit code 12',
+  });
+  const ctx = formatGuardContext({ hit: collapsed, gitFix: null }, 'npm run dev');
+  assert.match(ctx, /NOAUTH Authentication required/);
+});
