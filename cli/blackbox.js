@@ -16,6 +16,8 @@ const commands = {
   down: () => import('./cmd/down.js'),
   'ingest-daemon': () => import('./cmd/ingest-daemon.js'),
   flashback: () => import('./cmd/flashback.js'),
+  guard: () => import('./cmd/guard.js'),
+  'guard-hook': () => import('./cmd/guard-hook.js'), // internal: invoked by Claude Code's PreToolUse hook
   _flashback: () => import('./cmd/flashback.js'), // internal: fired by the zsh hook on failed commands
   _spool: () => import('./cmd/spool.js'), // internal: tests write events through this
   '_git-commit': () => import('./cmd/git-commit.js'), // internal: called by post-commit hook
@@ -31,6 +33,7 @@ Usage:
   blackbox status                                     component health check
   blackbox record                                     start an output-recorded subshell
   blackbox flashback "<command>" [--exit N]           preview the failed-command hint
+  blackbox guard install|uninstall|status             warn Claude Code about past failures pre-command
   blackbox init                                       install git hook in current repo
   blackbox setup                                      one-time setup (config, supermemory, zsh hooks)
   blackbox up                                         start ollama + supermemory + ingest daemon (e.g. after reboot)
