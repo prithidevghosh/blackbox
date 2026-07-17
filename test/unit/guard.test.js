@@ -136,3 +136,15 @@ test('dedupe: corrupt state file degrades to not-seen, and markInjected recovers
   markInjected('sess-1', 'npm run dev');
   assert.equal(alreadyInjected('sess-1', 'npm run dev'), true);
 });
+
+test('formatGuardContext (Feature B): fix line carries staleness + supersede annotations', () => {
+  const oldFix = result({ score: 0.8, source: 'git', ts: iso(30 * 86_400_000), content: 'Git commit old1:\nfix: old redis patch' });
+  const newFix = result({ score: 0.75, source: 'git', ts: iso(86_400_000), content: 'Git commit new1:\nfix: rotate redis password' });
+  const m = selectGuardMatch([npmFail(), oldFix, newFix], 'npm run dev', 0.72);
+  assert.equal(m.gitFix, newFix, 'newest fix wins');
+  const ctx = formatGuardContext(m, 'npm run dev', { fixNote: '⚠ possibly stale — ops/redis.conf changed 1 commit(s) after this fix (abc1234)' });
+  assert.match(ctx, /rotate redis password/);
+  assert.match(ctx, /possibly stale — ops\/redis\.conf/);
+  assert.match(ctx, /supersedes fix from/);
+  assert.ok(ctx.split('\n').length <= 3, 'still ≤3 lines');
+});

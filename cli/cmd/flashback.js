@@ -29,7 +29,14 @@ export async function run(args) {
     if (fb.enabled === false || !command || exit === 0 || exit === 130) return;
     const res = await search(cfg, command, { limit: 8, containerTags: [cfg.containerTag] }, 2500);
     const matches = selectMatches(res.results, fb.similarity_threshold ?? 0.72);
-    const hint = formatHint(matches, command);
+    // Feature B: check the fix against reality before showing it (≤150ms; any
+    // problem just omits the annotation — formatting never depends on it)
+    let fixNote = null;
+    if (matches.gitFix) {
+      const { stalenessNote } = await import('../../lib/staleness.js');
+      fixNote = stalenessNote(matches.gitFix);
+    }
+    const hint = formatHint(matches, command, { fixNote });
     if (hint) console.log(hint);
   } catch {
     // silence is the contract

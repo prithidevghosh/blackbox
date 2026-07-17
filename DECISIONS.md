@@ -180,3 +180,19 @@ JSON has no comments, so the "marked removable block" is the `guard-hook` token
 in the entry's command string — install is merge-only + idempotent, uninstall
 filters exactly those entries and prunes empty containers, unparseable settings
 abort untouched.
+
+## D7 — guard similarity threshold: 0.65 (not flashback's 0.72)
+
+**Measured** (e2e store, bge-base-en-v1.5, Supermemory Local /v3/search):
+queries against a stored `npm run dev` NOAUTH failure —
+`npm run dev` 0.693 · `npm run dev -- --port 3000` 0.697 ·
+`run the dev server with npm` 0.684; unrelated queries' top score against ANY
+failure doc: `terraform apply -auto-approve` 0.588 · `docker compose up` 0.575 ·
+`ls -la` 0.537.
+
+**Reasoning:** flashback matches verbatim command repeats (0.72 calibrated in
+D9); guard's incoming commands are near-miss variants the agent phrased itself,
+which land ~0.68-0.70. 0.65 splits the measured gap, and guard has a second
+independent filter flashback lacks: the binary/subcommand gate, so a false
+positive needs an unrelated command that BOTH scores >0.65 against a failure
+AND shares binary+subcommand with it — at which point it is arguably related.

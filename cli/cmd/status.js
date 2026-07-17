@@ -81,7 +81,7 @@ export async function run() {
       installed = guardInstalled(JSON.parse(fs.readFileSync(settingsPath(), 'utf8')));
     } catch {}
     const gEnabled = cfg.guard?.enabled !== false;
-    if (installed && gEnabled) console.log(ok(`guard                 on — warns Claude Code about past failures before Bash commands (threshold ≥ ${cfg.guard?.threshold ?? 0.72})`));
+    if (installed && gEnabled) console.log(ok(`guard                 on — warns Claude Code about past failures before Bash commands (threshold ≥ ${cfg.guard?.threshold ?? 0.65})`));
     else if (installed) console.log(warn('guard                 hook installed but disabled in config.json (guard.enabled)'));
     else console.log(warn('guard                 off — run: blackbox guard install'));
   } catch {}

@@ -45,15 +45,24 @@ export async function run() {
 
     const budget = Math.max(cap - (Date.now() - t0) - 60, 50); // leave margin to format + print
     const res = await search(cfg, command, { limit: 8, containerTags: [cfg.containerTag] }, budget);
-    const match = selectGuardMatch(res.results, command, cfg.guard?.threshold ?? 0.72);
+    const match = selectGuardMatch(res.results, command, cfg.guard?.threshold ?? 0.65);
     if (!match) process.exit(0);
+
+    // Feature B: staleness check on the fix within whatever budget remains
+    // (the hard-cap timer still guarantees the overall deadline)
+    let fixNote = null;
+    if (match.gitFix) {
+      const { stalenessNote, STALENESS_BUDGET_MS } = await import('../../lib/staleness.js');
+      const left = cap - (Date.now() - t0) - 40;
+      if (left > 30) fixNote = stalenessNote(match.gitFix, { budgetMs: Math.min(left, STALENESS_BUDGET_MS) });
+    }
 
     if (sessionId) markInjected(sessionId, command);
     process.stdout.write(
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
-          additionalContext: formatGuardContext(match, command),
+          additionalContext: formatGuardContext(match, command, { fixNote }),
         },
       }) + '\n'
     );

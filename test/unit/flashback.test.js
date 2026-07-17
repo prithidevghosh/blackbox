@@ -67,3 +67,15 @@ test('parseArgs: hook invocation shape', () => {
   const p = parseArgs(['--exit', '12', '--cwd', '/w', '--', 'redis-cli', 'PING']);
   assert.deepEqual(p, { command: 'redis-cli PING', exit: 12, cwd: '/w' });
 });
+
+test('formatHint (Feature B): fix line carries staleness + supersede annotations', () => {
+  const oldFix = noauth({ source: 'git', score: 0.75, ts: iso(30 * 86_400_000), content: 'fix: old redis patch' });
+  const newFix = noauth({ source: 'git', score: 0.74, ts: iso(2 * 86_400_000), content: 'fix: rotate redis password' });
+  const matches = selectMatches([noauth(), oldFix, newFix], 0.72);
+  assert.equal(matches.gitFix, newFix, 'newest fix wins regardless of score order');
+  const hint = formatHint(matches, 'redis-cli PING', { fixNote: '✓ still current' });
+  assert.match(hint, /rotate redis password/);
+  assert.match(hint, /✓ still current/);
+  assert.match(hint, /supersedes fix from \d{4}-\d{2}-\d{2}/);
+  assert.ok(!/old redis patch/.test(hint), 'superseded fix content not shown');
+});

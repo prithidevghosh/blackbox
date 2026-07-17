@@ -123,7 +123,7 @@ export async function run(args) {
     console.log(installed ? `${green('●')} hook installed in ${file}` : `${yellow('●')} hook not installed — run: blackbox guard install`);
     console.log(
       enabled
-        ? `${green('●')} enabled — threshold ${cfg.guard?.threshold ?? 0.72}, hard cap ${cfg.guard?.timeout_ms ?? 800}ms, advise-only (never blocks)`
+        ? `${green('●')} enabled — threshold ${cfg.guard?.threshold ?? 0.65}, hard cap ${cfg.guard?.timeout_ms ?? 800}ms, advise-only (never blocks)`
         : `${red('●')} disabled in config.json (guard.enabled)`
     );
     return;
