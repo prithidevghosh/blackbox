@@ -472,8 +472,9 @@ async function main() {
   );
 
   // (d) staleness path erroring (repo's git gone) → clean output, no annotation
+  // (no retries here — this asserts the ABSENCE of annotations)
   fs.rmSync(path.join(repoDir, '.git'), { recursive: true, force: true });
-  const brokenOut = askOut2('authentication problem with redis');
+  const brokenOut = sh('node', [cli, 'ask', 'authentication problem with redis', '--limit', '8'], { cwd: repoDir });
   check(
     'staleness: corrupt repo → clean output with no staleness claim',
     /NOAUTH/.test(brokenOut) && !/✓ still current/.test(brokenOut) && !/possibly stale/.test(brokenOut)
