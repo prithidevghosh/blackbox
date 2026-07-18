@@ -207,3 +207,15 @@ search yields hits but no git fix, both flashback and guard now run ONE extra
 search seeded with the failure's own root-cause line and accept the newest git
 result above the same threshold. Cost: one extra local search (~100ms) only on
 the miss path; guard still enforces its overall hard cap.
+
+## D9 — informative failures lead; fixes stay in the failure's repo
+
+Live rehearsal caught two selection defects. (1) A passive zsh capture of a
+failure carries no output, so a fresh bare re-run of an old failure ("FAILED
+with exit code 1") outranked the recorded twin that actually contains the
+error text — the hint/injection then cited the new failure and hid its own
+history. Informative failures (root-cause line beyond the exit-code epilogue)
+now lead among above-threshold candidates. (2) Fix selection had no repo
+constraint, so a recent commit in an unrelated repo could ride along as "the
+fix" for another repo's failure. Both the primary and the D8 fallback fix
+lookups now require the fix commit to come from the hit's own repo.

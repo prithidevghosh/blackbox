@@ -59,7 +59,7 @@ export async function run() {
         // wider limit: the error text also matches many terminal/agent docs,
         // which would crowd every git result out of a top-8
         const res2 = await search(cfg, `fix ${err}`, { limit: 16, containerTags: [cfg.containerTag] }, left);
-        const { fix, supersedes } = pickFixFromResults(res2.results, cfg.guard?.threshold ?? 0.65);
+        const { fix, supersedes } = pickFixFromResults(res2.results, cfg.guard?.threshold ?? 0.65, match.hit.metadata?.repo || null);
         if (fix) Object.assign(match, { gitFix: fix, supersedes });
       }
     }
