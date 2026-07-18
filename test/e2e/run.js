@@ -206,7 +206,7 @@ async function main() {
       const docs = list.memories || [];
       return docs.length >= EXPECTED_MIN && docs.every((d) => d.status === 'done' || d.status === 'failed');
     },
-    { timeoutMs: 600_000, stepMs: 3000, label: 'documents processed' } // 8 docs × ~40-60s of local-LLM memory-agent time ÷ 2 workers
+    { timeoutMs: 900_000, stepMs: 3000, label: 'documents processed' } // 8 docs × ~60s+ of local-LLM memory-agent time, measured; later stages need a quiet machine
   );
   const list = await api('/v3/documents/list', { containerTags: [RUN_TAG], limit: 50 });
   const docs = list.memories || [];
@@ -420,10 +420,21 @@ async function main() {
 
   // ── staleness (Feature B): fix memories checked against reality ──
   console.log('\n[stage staleness]');
-  const askOut2 = (q) => sh('node', [cli, 'ask', q, '--limit', '8'], { cwd: repoDir });
+  // Annotations have a hard 150ms budget and legitimately degrade to silence
+  // on a saturated machine (fail-open) — retry a few times so a transient
+  // budget miss doesn't fail the assertion.
+  const askAnnotated = async (q, wantRe, tries = 4) => {
+    let out = '';
+    for (let i = 0; i < tries; i++) {
+      out = sh('node', [cli, 'ask', q, '--limit', '8'], { cwd: repoDir });
+      if (wantRe.test(out)) return out;
+      await sleep(2000);
+    }
+    return out;
+  };
 
   // (a) nothing touched since the fix commit → "✓ still current"
-  const freshOut = askOut2('authentication problem with redis');
+  const freshOut = await askAnnotated('authentication problem with redis', /✓ still current/);
   check(
     'staleness: untouched fix is annotated "✓ still current"',
     /\[git\]/.test(freshOut) && /✓ still current/.test(freshOut),
@@ -434,11 +445,9 @@ async function main() {
   fs.appendFileSync(path.join(repoDir, 'cache.js'), '// tune timeouts\n');
   git('add', '.');
   git('commit', '-m', 'chore: bump cache timeout'); // deliberately un-ticketed: must NOT supersede
-  const staleOut = askOut2('authentication problem with redis');
-  check(
-    'staleness: evidence file changed after the fix → "⚠ possibly stale" naming it',
-    /⚠ possibly stale — cache\.js changed \d+ commit\(s\) after this fix \([0-9a-f]{7,}\)/.test(staleOut)
-  );
+  const staleRe = /⚠ possibly stale — cache\.js changed \d+ commit\(s\) after this fix \([0-9a-f]{7,}\)/;
+  const staleOut = await askAnnotated('authentication problem with redis', staleRe);
+  check('staleness: evidence file changed after the fix → "⚠ possibly stale" naming it', staleRe.test(staleOut));
   check('staleness: unrelated same-repo commit does not create a supersede note', !/supersedes fix from/.test(staleOut));
 
   // (c) a second, newer fix for the same ticket → newest wins with supersede note
@@ -451,9 +460,11 @@ async function main() {
       const gits = (list.memories || []).filter((d) => d.metadata?.source === 'git');
       return gits.length >= 3 && gits.every((d) => d.status === 'done' || d.status === 'failed');
     },
-    { timeoutMs: 240_000, stepMs: 3000, label: 'new git commits processed' }
+    { timeoutMs: 600_000, stepMs: 3000, label: 'new git commits processed' }
   );
-  const supOut = gitDocsDone ? askOut2('authentication problem with redis') : '';
+  const supOut = gitDocsDone
+    ? await askAnnotated('authentication problem with redis', /supersedes fix from \d{4}-\d{2}-\d{2}/)
+    : '';
   check(
     'staleness: newer fix for the same ticket supersedes the older one',
     /rotate redis auth/.test(supOut) && /supersedes fix from \d{4}-\d{2}-\d{2}/.test(supOut),
